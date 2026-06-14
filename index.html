@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BukuUang - Pembukuan Elegan</title>
+    <!-- React & Babel CDN untuk menjalankan React langsung di Browser HP -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS CDN (Tema Skyblue) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide-react"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+        const { 
+          Wallet, TrendingUp, TrendingDown, Briefcase, Calendar, 
+          AlertCircle, PiggyBank, CreditCard, Plus, CheckCircle, 
+          Home, List, ArrowRightLeft, User 
+        } = LucideReact;
+
+        const formatRp = (angka) => {
+          return new Intl.NumberFormat('id-ID', {
+            style: 'currency',
+            currency: 'IDR',
+            minimumFractionDigits: 0
+          }).format(angka);
+        };
+
+        const getTodayDate = () => new Date().toISOString().split('T')[0];
+
+        function App() {
+          const [activeTab, setActiveTab] = useState('dashboard');
+          const [accounts, setAccounts] = useState({ main: 150000, savings: 500000, emergency: 250000 });
+          const [transactions, setTransactions] = useState([
+            { id: 1, date: getTodayDate(), type: 'IN', category: 'Saldo Awal', amount: 150000, desc: 'Saldo awal dompet' }
+          ]);
+          const [tasks, setTasks] = useState([
+            { id: 1, date: getTodayDate(), name: 'Maintenance', amount: 50000, status: 'PENDING', customerId: 'PLG-8821' },
+            { id: 2, date: getTodayDate(), name: 'Perbantuan Tim Lain', amount: 25000, status: 'PENDING', customerId: 'Tim Alpha' }
+          ]);
+          const [bills, setBills] = useState([
+            { id: 1, name: 'Cicilan Kredit', amount: 800000, dueDate: '15', status: 'UNPAID' }
+          ]);
+
+          const stats = useMemo(() => {
+            const todayStr = getTodayDate();
+            let dailyIn = 0, dailyOut = 0, weeklyIn = 0, weeklyOut = 0, monthlyIn = 0, monthlyOut = 0;
+            transactions.forEach(tx => {
+              if (tx.type === 'IN') {
+                if (tx.date === todayStr) dailyIn += tx.amount;
+                weeklyIn += tx.amount; monthlyIn += tx.amount;
+              } else {
+                if (tx.date === todayStr) dailyOut += tx.amount;
+                weeklyOut += tx.amount; monthlyOut += tx.amount;
+              }
+            });
+            return { dailyIn, dailyOut, weeklyIn, weeklyOut, monthlyIn, monthlyOut };
+          }, [transactions]);
+
+          const pendingTaskAmount = tasks.filter(t => t.status === 'PENDING').reduce((acc, curr) => acc + curr.amount, 0);
+
+          const addTransaction = (type, category, amount, desc) => {
+            setTransactions([{ id: Date.now(), date: getTodayDate(), type, category, amount: Number(amount), desc }, ...transactions]);
+            setAccounts(prev => ({ ...prev, main: type === 'IN' ? prev.main + Number(amount) : prev.main - Number(amount) }));
+          };
+
+          const cashOutTasks = () => {
+            if (pendingTaskAmount === 0) return alert('Tidak ada tugas untuk dicairkan.');
+            addTransaction('IN', 'Pendapatan Mingguan', pendingTaskAmount, 'Pencairan Tugas Harian (Selasa)');
+            setTasks(tasks.map(t => ({ ...t, status: 'PAID' })));
+          };
+
+          const claimSalary = (absentDays) => {
+            const finalSalary = 2000000 - (Number(absentDays) * 50000);
+            addTransaction('IN', 'Gaji Pokok', finalSalary, `Gaji Tgl 5 (Potongan izin ${absentDays} hari)`);
+          };
+
+          const payBill = (id, amount, name) => {
+            if (accounts.main < amount) return alert('Saldo tidak cukup!');
+            addTransaction('OUT', 'Tagihan', amount, `Bayar ${name}`);
+            setBills(bills.map(b => b.id === id ? { ...b, status: 'PAID' } : b));
+          };
+
+          // --- UI TABS ---
+          const DashboardTab = () => (
+            <div className="space-y-6 animate-fade-in">
+              <div className="grid grid-cols-1 gap-4">
+                <div className="bg-gradient-to-br from-sky-500 to-sky-600 text-white p-6 rounded-2xl shadow-md shadow-sky-100">
+                  <div className="flex items-center gap-2 mb-1 opacity-90"><Wallet size={18} /> <span className="text-sm font-medium">Saldo Utama</span></div>
+                  <p className="text-3xl font-extrabold tracking-wide">{formatRp(accounts.main)}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
+                    <div className="flex items-center gap-2 mb-1 text-slate-500"><PiggyBank size={16} className="text-sky-500" /> <span className="text-xs font-medium">Tabungan</span></div>
+                    <p className="text-lg font-bold text-slate-800">{formatRp(accounts.savings)}</p>
+                  </div>
+                  <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
+                    <div className="flex items-center gap-2 mb-1 text-slate-500"><AlertCircle size={16} className="text-amber-500" /> <span className="text-xs font-medium">Dana Darurat</span></div>
+                    <p className="text-lg font-bold text-slate-800">{formatRp(accounts.emergency)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-sky-500" /> Ringkasan Arus Kas</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between py-2 border-b border-slate-50">
+                    <span className="text-slate-600 font-medium">Hari Ini</span>
+                    <span className="text-emerald-600 font-bold">+{formatRp(stats.dailyIn)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-slate-50">
+                    <span className="text-slate-600 font-medium">Minggu Ini</span>
+                    <span className="text-emerald-600 font-bold">+{formatRp(stats.weeklyIn)}</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-slate-600 font-medium">Bulan Ini</span>
+                    <span className="text-emerald-600 font-bold">+{formatRp(stats.monthlyIn)}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+
+          const PekerjaanTab = () => {
+            const [type, setType] = useState('Maintenance');
+            const [cust, setCust] = useState('');
+            const [absent, setAbsent] = useState(0);
+
+            return (
+              <div className="space-y-6">
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Briefcase size={18} className="text-sky-500" /> Input Tugas Kerja</h3>
+                  <div className="space-y-3">
+                    <select value={type} onChange={e => setType(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm">
+                      <option value="Maintenance">Maintenance (Rp 50.000)</option>
+                      <option value="Perbantuan Tim Lain">Perbantuan Tim Lain (Rp 25.000)</option>
+                    </select>
+                    <input type="text" value={cust} onChange={e => setCust(e.target.value)} placeholder="Masukkan ID Pelanggan" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"/>
+                    <button onClick={() => {
+                      if(!cust) return alert('Isi ID Pelanggan!');
+                      setTasks([...tasks, { id: Date.now(), date: getTodayDate(), name: type, amount: type==='Maintenance'?50000:25000, status:'PENDING', customerId: cust }]);
+                      setCust('');
+                    }} className="w-full bg-sky-500 text-white p-3 rounded-xl font-bold text-sm hover:bg-sky-600">Tambah ke Jadwal</button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar size={18} className="text-emerald-500" /> Gaji Bulanan (Tgl 5)</h3>
+                  <div className="flex gap-2 items-center">
+                    <input type="number" value={absent} onChange={e => setAbsent(e.target.value)} placeholder="Jumlah Izin Kerja" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"/>
+                    <button onClick={() => claimSalary(absent)} className="bg-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm">Cairkan Gaji</button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><List size={18} className="text-sky-500" /> List Akumulasi Kerja</h3>
+                    <span className="text-sky-600 font-bold">{formatRp(pendingTaskAmount)}</span>
+                  </div>
+                  <div className="space-y-2 mb-4 max-h-52 overflow-y-auto">
+                    {tasks.filter(t => t.status==='PENDING').map(t => (
+                      <div key={t.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                        <div>
+                          <p className="font-bold text-slate-700">{t.name}</p>
+                          <p className="text-xs text-slate-400">ID: {t.customerId}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => setTasks(tasks.map(tk => tk.id === t.id ? {...tk, status:'SUCCESS'} : tk))} className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold">Selesai</button>
+                          <button onClick={() => setTasks(tasks.map(tk => tk.id === t.id ? {...tk, status:'CANCELLED'} : tk))} className="bg-rose-100 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Batal</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={cashOutTasks} className="w-full bg-sky-50 border border-sky-200 text-sky-700 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"><CheckCircle size={16}/> Cairkan Hasil Kerja (Hari Selasa)</button>
+                </div>
+              </div>
+            );
+          };
+
+          const TagihanTab = () => {
+            return (
+              <div className="space-y-4">
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><CreditCard size={18} className="text-rose-500" /> Kontrol Tagihan Kredit</h3>
+                  {bills.map(b => (
+                    <div key={b.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl">
+                      <div>
+                        <p className="font-bold text-slate-700 text-sm">{b.name}</p>
+                        <p className="text-xs text-rose-500 font-medium">{formatRp(b.amount)}</p>
+                      </div>
+                      {b.status === 'UNPAID' ? (
+                        <button onClick={() => payBill(b.id, b.amount, b.name)} className="bg-rose-500 text-white text-xs px-3 py-2 rounded-lg font-bold">Bayar</button>
+                      ) : (
+                        <span className="text-emerald-600 bg-emerald-50 text-xs px-3 py-2 rounded-lg font-bold">Lunas</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          };
+
+          return (
+            <div className="min-h-screen pb-24">
+              <header className="bg-white border-b border-slate-100 sticky top-0 px-5 py-4 flex justify-between items-center shadow-sm">
+                <h1 className="text-lg font-black text-sky-600 flex items-center gap-1.5"><Wallet className="fill-sky-50" /> BukuUang</h1>
+                <span className="text-xs font-bold bg-sky-50 text-sky-600 px-3 py-1 rounded-full">Device Aktif</span>
+              </header>
+
+              <main className="max-w-md mx-auto p-4 mt-2">
+                {activeTab === 'dashboard' && <DashboardTab />}
+                {activeTab === 'pekerjaan' && <PekerjaanTab />}
+                {activeTab === 'tagihan' && <TagihanTab />}
+              </main>
+
+              <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 flex justify-around p-3 shadow-lg">
+                <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'dashboard' ? 'text-sky-500' : 'text-slate-400'}`}><Home size={20} />Beranda</button>
+                <button onClick={() => setActiveTab('pekerjaan')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'pekerjaan' ? 'text-sky-500' : 'text-slate-400'}`}><Briefcase size={20} />Kerja</button>
+                <button onClick={() => setActiveTab('tagihan')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'tagihan' ? 'text-sky-500' : 'text-slate-400'}`}><CreditCard size={20} />Tagihan</button>
+              </nav>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
