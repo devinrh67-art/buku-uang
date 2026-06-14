@@ -3,233 +3,435 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BukuUang - Pembukuan Elegan</title>
-    <!-- React & Babel CDN untuk menjalankan React langsung di Browser HP -->
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Tailwind CSS CDN (Tema Skyblue) -->
+    <title>BukuKas Elegan - Solusi Pembukuan Keuangan</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons CDN -->
-    <script src="https://unpkg.com/lucide-react"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        sky: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f8fafc;
+            -webkit-tap-highlight-color: transparent;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Page transition slide effect */
+        .view-content {
+            transition: opacity 0.25s ease-in-out, transform 0.25s ease-in-out;
+        }
+    </style>
 </head>
-<body class="bg-slate-50 text-slate-900 font-sans">
+<body class="font-sans text-slate-800 antialiased pb-24 lg:pb-6">
 
-    <div id="root"></div>
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    <script type="text/babel">
-        const { useState, useMemo } = React;
-        const { 
-          Wallet, TrendingUp, TrendingDown, Briefcase, Calendar, 
-          AlertCircle, PiggyBank, CreditCard, Plus, CheckCircle, 
-          Home, List, ArrowRightLeft, User 
-        } = LucideReact;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'pembukuan-elegan-default';
+        const firebaseConfig = JSON.parse(__firebase_config);
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-        const formatRp = (angka) => {
-          return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0
-          }).format(angka);
+        window.appState = {
+            user: null,
+            bookId: 'default-book',
+            currentTab: 'dashboard',
+            tickets: [],
+            expenses: [],
+            credits: [],
+            savings: { tabungan: 0, darurat: 0 },
+            deductions: [],
+            manualIncomes: []
         };
 
-        const getTodayDate = () => new Date().toISOString().split('T')[0];
+        // UI Helpers
+        const formatRupiah = (number) => {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(number);
+        };
 
-        function App() {
-          const [activeTab, setActiveTab] = useState('dashboard');
-          const [accounts, setAccounts] = useState({ main: 150000, savings: 500000, emergency: 250000 });
-          const [transactions, setTransactions] = useState([
-            { id: 1, date: getTodayDate(), type: 'IN', category: 'Saldo Awal', amount: 150000, desc: 'Saldo awal dompet' }
-          ]);
-          const [tasks, setTasks] = useState([
-            { id: 1, date: getTodayDate(), name: 'Maintenance', amount: 50000, status: 'PENDING', customerId: 'PLG-8821' },
-            { id: 2, date: getTodayDate(), name: 'Perbantuan Tim Lain', amount: 25000, status: 'PENDING', customerId: 'Tim Alpha' }
-          ]);
-          const [bills, setBills] = useState([
-            { id: 1, name: 'Cicilan Kredit', amount: 800000, dueDate: '15', status: 'UNPAID' }
-          ]);
+        const showNotification = (message, type = 'success') => {
+            const notif = document.getElementById('notification');
+            const notifText = document.getElementById('notification-text');
+            const notifIcon = document.getElementById('notification-icon');
+            
+            notifText.innerText = message;
+            if (type === 'success') {
+                notif.className = "fixed top-4 right-4 left-4 md:left-auto md:w-96 bg-emerald-500 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 transform transition-all duration-300 z-50";
+                notifIcon.className = "fa-solid fa-circle-check";
+            } else {
+                notif.className = "fixed top-4 right-4 left-4 md:left-auto md:w-96 bg-rose-500 text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 transform transition-all duration-300 z-50";
+                notifIcon.className = "fa-solid fa-circle-exclamation";
+            }
+            
+            notif.classList.remove('translate-y-[-100px]', 'opacity-0');
+            setTimeout(() => {
+                notif.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, 3000);
+        };
 
-          const stats = useMemo(() => {
-            const todayStr = getTodayDate();
-            let dailyIn = 0, dailyOut = 0, weeklyIn = 0, weeklyOut = 0, monthlyIn = 0, monthlyOut = 0;
-            transactions.forEach(tx => {
-              if (tx.type === 'IN') {
-                if (tx.date === todayStr) dailyIn += tx.amount;
-                weeklyIn += tx.amount; monthlyIn += tx.amount;
-              } else {
-                if (tx.date === todayStr) dailyOut += tx.amount;
-                weeklyOut += tx.amount; monthlyOut += tx.amount;
-              }
+        // Copy Link to Share
+        window.copyShareLink = () => {
+            const shareUrl = `${window.location.origin}${window.location.pathname}#${window.appState.bookId}`;
+            
+            const tempInput = document.createElement('input');
+            tempInput.value = shareUrl;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+                showNotification("Tautan pembukuan disalin! Bagikan ke perangkat lain.");
+            } catch (err) {
+                showNotification("Gagal menyalin tautan secara otomatis.", "error");
+            }
+            document.body.removeChild(tempInput);
+        };
+
+        // Determine unique book ID from URL hash or generate new one
+        const initBookId = () => {
+            let hash = window.location.hash.substring(1);
+            if (!hash) {
+                hash = 'buku-' + Math.random().toString(36).substring(2, 11);
+                window.location.hash = hash;
+            }
+            window.appState.bookId = hash;
+            document.getElementById('share-code-display').innerText = hash;
+            document.getElementById('share-link-input').value = `${window.location.origin}${window.location.pathname}#${hash}`;
+        };
+
+        // Handle authentication and database binding
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                showNotification("Koneksi gagal. Silakan muat ulang halaman.", "error");
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                window.appState.user = user;
+                initBookId();
+                bindDatabase();
+            }
+        });
+
+        // Firestore Path Helper (Strict Path Rule 1)
+        const getCollectionRef = (collectionName) => {
+            return collection(db, 'artifacts', appId, 'public', 'data', `${window.appState.bookId}_${collectionName}`);
+        };
+
+        let unsubscribes = [];
+        const bindDatabase = () => {
+            unsubscribes.forEach(unsub => unsub());
+            unsubscribes = [];
+
+            if (!window.appState.user) return;
+
+            // Load Tickets
+            const unsubTickets = onSnapshot(getCollectionRef('tickets'), (snapshot) => {
+                window.appState.tickets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data tiket.", "error");
             });
-            return { dailyIn, dailyOut, weeklyIn, weeklyOut, monthlyIn, monthlyOut };
-          }, [transactions]);
+            unsubscribes.push(unsubTickets);
 
-          const pendingTaskAmount = tasks.filter(t => t.status === 'PENDING').reduce((acc, curr) => acc + curr.amount, 0);
+            // Load Expenses
+            const unsubExpenses = onSnapshot(getCollectionRef('expenses'), (snapshot) => {
+                window.appState.expenses = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data pengeluaran.", "error");
+            });
+            unsubscribes.push(unsubExpenses);
 
-          const addTransaction = (type, category, amount, desc) => {
-            setTransactions([{ id: Date.now(), date: getTodayDate(), type, category, amount: Number(amount), desc }, ...transactions]);
-            setAccounts(prev => ({ ...prev, main: type === 'IN' ? prev.main + Number(amount) : prev.main - Number(amount) }));
-          };
+            // Load Credits
+            const unsubCredits = onSnapshot(getCollectionRef('credits'), (snapshot) => {
+                window.appState.credits = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data kredit.", "error");
+            });
+            unsubscribes.push(unsubCredits);
 
-          const cashOutTasks = () => {
-            if (pendingTaskAmount === 0) return alert('Tidak ada tugas untuk dicairkan.');
-            addTransaction('IN', 'Pendapatan Mingguan', pendingTaskAmount, 'Pencairan Tugas Harian (Selasa)');
-            setTasks(tasks.map(t => ({ ...t, status: 'PAID' })));
-          };
+            // Load Savings
+            const unsubSavings = onSnapshot(getCollectionRef('savings'), (snapshot) => {
+                if (!snapshot.empty) {
+                    const data = snapshot.docs[0].data();
+                    window.appState.savings = { id: snapshot.docs[0].id, ...data };
+                } else {
+                    window.appState.savings = { tabungan: 0, darurat: 0 };
+                }
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data tabungan.", "error");
+            });
+            unsubscribes.push(unsubSavings);
 
-          const claimSalary = (absentDays) => {
-            const finalSalary = 2000000 - (Number(absentDays) * 50000);
-            addTransaction('IN', 'Gaji Pokok', finalSalary, `Gaji Tgl 5 (Potongan izin ${absentDays} hari)`);
-          };
+            // Load Deductions (Izin)
+            const unsubDeductions = onSnapshot(getCollectionRef('deductions'), (snapshot) => {
+                window.appState.deductions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data izin.", "error");
+            });
+            unsubscribes.push(unsubDeductions);
 
-          const payBill = (id, amount, name) => {
-            if (accounts.main < amount) return alert('Saldo tidak cukup!');
-            addTransaction('OUT', 'Tagihan', amount, `Bayar ${name}`);
-            setBills(bills.map(b => b.id === id ? { ...b, status: 'PAID' } : b));
-          };
+            // Load Manual Incomes
+            const unsubManualIncomes = onSnapshot(getCollectionRef('manual_incomes'), (snapshot) => {
+                window.appState.manualIncomes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderAll();
+            }, (err) => {
+                showNotification("Gagal memuat data pendapatan manual.", "error");
+            });
+            unsubscribes.push(unsubManualIncomes);
+        };
 
-          // --- UI TABS ---
-          const DashboardTab = () => (
-            <div className="space-y-6 animate-fade-in">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="bg-gradient-to-br from-sky-500 to-sky-600 text-white p-6 rounded-2xl shadow-md shadow-sky-100">
-                  <div className="flex items-center gap-2 mb-1 opacity-90"><Wallet size={18} /> <span className="text-sm font-medium">Saldo Utama</span></div>
-                  <p className="text-3xl font-extrabold tracking-wide">{formatRp(accounts.main)}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-1 text-slate-500"><PiggyBank size={16} className="text-sky-500" /> <span className="text-xs font-medium">Tabungan</span></div>
-                    <p className="text-lg font-bold text-slate-800">{formatRp(accounts.savings)}</p>
-                  </div>
-                  <div className="bg-white border border-slate-100 p-4 rounded-2xl shadow-sm">
-                    <div className="flex items-center gap-2 mb-1 text-slate-500"><AlertCircle size={16} className="text-amber-500" /> <span className="text-xs font-medium">Dana Darurat</span></div>
-                    <p className="text-lg font-bold text-slate-800">{formatRp(accounts.emergency)}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                <h3 className="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2"><TrendingUp size={16} className="text-sky-500" /> Ringkasan Arus Kas</h3>
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between py-2 border-b border-slate-50">
-                    <span className="text-slate-600 font-medium">Hari Ini</span>
-                    <span className="text-emerald-600 font-bold">+{formatRp(stats.dailyIn)}</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-slate-50">
-                    <span className="text-slate-600 font-medium">Minggu Ini</span>
-                    <span className="text-emerald-600 font-bold">+{formatRp(stats.weeklyIn)}</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-slate-600 font-medium">Bulan Ini</span>
-                    <span className="text-emerald-600 font-bold">+{formatRp(stats.monthlyIn)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
+        const calculateTicketEarnings = (ticket) => {
+            if (ticket.status !== 'completed') return 0;
+            return ticket.type === 'maintenance' ? 50000 : 25000;
+        };
 
-          const PekerjaanTab = () => {
-            const [type, setType] = useState('Maintenance');
-            const [cust, setCust] = useState('');
-            const [absent, setAbsent] = useState(0);
+        const getDisbursementDate = (ticketDateStr) => {
+            const date = new Date(ticketDateStr);
+            const day = date.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+            
+            let daysToNextTuesday;
+            if (day === 0) { // Sunday
+                daysToNextTuesday = 2; // Next Tuesday
+            } else {
+                daysToNextTuesday = 9 - day; // Next week's Tuesday
+            }
+            
+            const disburseDate = new Date(date);
+            disburseDate.setDate(date.getDate() + daysToNextTuesday);
+            return disburseDate.toISOString().split('T')[0];
+        };
 
-            return (
-              <div className="space-y-6">
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Briefcase size={18} className="text-sky-500" /> Input Tugas Kerja</h3>
-                  <div className="space-y-3">
-                    <select value={type} onChange={e => setType(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm">
-                      <option value="Maintenance">Maintenance (Rp 50.000)</option>
-                      <option value="Perbantuan Tim Lain">Perbantuan Tim Lain (Rp 25.000)</option>
-                    </select>
-                    <input type="text" value={cust} onChange={e => setCust(e.target.value)} placeholder="Masukkan ID Pelanggan" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"/>
-                    <button onClick={() => {
-                      if(!cust) return alert('Isi ID Pelanggan!');
-                      setTasks([...tasks, { id: Date.now(), date: getTodayDate(), name: type, amount: type==='Maintenance'?50000:25000, status:'PENDING', customerId: cust }]);
-                      setCust('');
-                    }} className="w-full bg-sky-500 text-white p-3 rounded-xl font-bold text-sm hover:bg-sky-600">Tambah ke Jadwal</button>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><Calendar size={18} className="text-emerald-500" /> Gaji Bulanan (Tgl 5)</h3>
-                  <div className="flex gap-2 items-center">
-                    <input type="number" value={absent} onChange={e => setAbsent(e.target.value)} placeholder="Jumlah Izin Kerja" className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-sm"/>
-                    <button onClick={() => claimSalary(absent)} className="bg-emerald-500 text-white px-4 py-3 rounded-xl font-bold text-sm">Cairkan Gaji</button>
-                  </div>
-                </div>
-
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><List size={18} className="text-sky-500" /> List Akumulasi Kerja</h3>
-                    <span className="text-sky-600 font-bold">{formatRp(pendingTaskAmount)}</span>
-                  </div>
-                  <div className="space-y-2 mb-4 max-h-52 overflow-y-auto">
-                    {tasks.filter(t => t.status==='PENDING').map(t => (
-                      <div key={t.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm">
-                        <div>
-                          <p className="font-bold text-slate-700">{t.name}</p>
-                          <p className="text-xs text-slate-400">ID: {t.customerId}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => setTasks(tasks.map(tk => tk.id === t.id ? {...tk, status:'SUCCESS'} : tk))} className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-lg text-xs font-bold">Selesai</button>
-                          <button onClick={() => setTasks(tasks.map(tk => tk.id === t.id ? {...tk, status:'CANCELLED'} : tk))} className="bg-rose-100 text-rose-700 px-3 py-1 rounded-lg text-xs font-bold">Batal</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={cashOutTasks} className="w-full bg-sky-50 border border-sky-200 text-sky-700 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"><CheckCircle size={16}/> Cairkan Hasil Kerja (Hari Selasa)</button>
-                </div>
-              </div>
+        // Render Data Function
+        const renderAll = () => {
+            const today = new Date();
+            const todayStr = today.toISOString().split('T')[0];
+            
+            // Filter Search Ticket
+            const searchInput = document.getElementById('search-ticket-input').value.toLowerCase();
+            const filteredTickets = window.appState.tickets.filter(t => 
+                t.ticketId.toLowerCase().includes(searchInput) || 
+                t.customerId.toLowerCase().includes(searchInput)
             );
-          };
 
-          const TagihanTab = () => {
-            return (
-              <div className="space-y-4">
-                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                  <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><CreditCard size={18} className="text-rose-500" /> Kontrol Tagihan Kredit</h3>
-                  {bills.map(b => (
-                    <div key={b.id} className="flex justify-between items-center p-3 border border-slate-100 rounded-xl">
-                      <div>
-                        <p className="font-bold text-slate-700 text-sm">{b.name}</p>
-                        <p className="text-xs text-rose-500 font-medium">{formatRp(b.amount)}</p>
-                      </div>
-                      {b.status === 'UNPAID' ? (
-                        <button onClick={() => payBill(b.id, b.amount, b.name)} className="bg-rose-500 text-white text-xs px-3 py-2 rounded-lg font-bold">Bayar</button>
-                      ) : (
-                        <span className="text-emerald-600 bg-emerald-50 text-xs px-3 py-2 rounded-lg font-bold">Lunas</span>
-                      )}
+            // Compute Financial Metrics
+            let totalDailyIncome = 0;
+            let totalWeeklyIncome = 0;
+            let totalMonthlyIncome = 0;
+
+            let totalDailyExpense = 0;
+            let totalWeeklyExpense = 0;
+            let totalMonthlyExpense = 0;
+
+            const now = new Date();
+            const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + (now.getDay() === 0 ? -6 : 1))); // Monday of current week
+            startOfWeek.setHours(0,0,0,0);
+            
+            const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+            // --- CALCULATE EXPENSES ---
+            window.appState.expenses.forEach(exp => {
+                const expDate = new Date(exp.date);
+                const isToday = exp.date === todayStr;
+                const isThisWeek = expDate >= startOfWeek;
+                const isThisMonth = expDate >= startOfMonth;
+
+                if (isToday) totalDailyExpense += Number(exp.amount);
+                if (isThisWeek) totalWeeklyExpense += Number(exp.amount);
+                if (isThisMonth) totalMonthlyExpense += Number(exp.amount);
+            });
+
+            // --- CALCULATE SYSTEM INCOME ---
+            let basicSalary = 0;
+            const salaryPaidThisMonth = today.getDate() >= 5;
+            if (salaryPaidThisMonth) {
+                basicSalary = 2000000;
+            }
+
+            let totalDeductionsThisMonth = 0;
+            let totalDeductionsThisWeek = 0;
+            let totalDeductionsToday = 0;
+
+            window.appState.deductions.forEach(ded => {
+                const dedDate = new Date(ded.date);
+                const isToday = ded.date === todayStr;
+                const isThisWeek = dedDate >= startOfWeek;
+                const isThisMonth = dedDate >= startOfMonth;
+
+                if (isToday) totalDeductionsToday += 50000;
+                if (isThisWeek) totalDeductionsThisWeek += 50000;
+                if (isThisMonth) totalDeductionsThisMonth += 50000;
+            });
+
+            // Ticket Income logic
+            window.appState.tickets.forEach(ticket => {
+                if (ticket.status === 'completed') {
+                    const ticketVal = calculateTicketEarnings(ticket);
+                    const disburseDateStr = getDisbursementDate(ticket.date);
+                    const disburseDate = new Date(disburseDateStr);
+
+                    const isDisburseToday = disburseDateStr === todayStr;
+                    const isDisburseThisWeek = disburseDate >= startOfWeek;
+                    const isDisburseThisMonth = disburseDate >= startOfMonth;
+
+                    if (isDisburseToday) totalDailyIncome += ticketVal;
+                    if (isDisburseThisWeek) totalWeeklyIncome += ticketVal;
+                    if (isDisburseThisMonth) totalMonthlyIncome += ticketVal;
+                }
+            });
+
+            // Add manual incomes
+            window.appState.manualIncomes.forEach(inc => {
+                const incDate = new Date(inc.date);
+                const isToday = inc.date === todayStr;
+                const isThisWeek = incDate >= startOfWeek;
+                const isThisMonth = incDate >= startOfMonth;
+
+                if (isToday) totalDailyIncome += Number(inc.amount);
+                if (isThisWeek) totalWeeklyIncome += Number(inc.amount);
+                if (isThisMonth) totalMonthlyIncome += Number(inc.amount);
+            });
+
+            // Deduct from total
+            totalMonthlyIncome += basicSalary;
+            totalMonthlyIncome -= totalDeductionsThisMonth;
+            totalWeeklyIncome -= totalDeductionsThisWeek;
+            totalDailyIncome -= totalDeductionsToday;
+
+            totalMonthlyIncome = Math.max(0, totalMonthlyIncome);
+            totalWeeklyIncome = Math.max(0, totalWeeklyIncome);
+            totalDailyIncome = Math.max(0, totalDailyIncome);
+
+            // --- RENDER FINANCIAL CARD HIGHLIGHTS ---
+            document.getElementById('income-daily').innerText = formatRupiah(totalDailyIncome);
+            document.getElementById('income-weekly').innerText = formatRupiah(totalWeeklyIncome);
+            document.getElementById('income-monthly').innerText = formatRupiah(totalMonthlyIncome);
+
+            document.getElementById('expense-daily').innerText = formatRupiah(totalDailyExpense);
+            document.getElementById('expense-weekly').innerText = formatRupiah(totalWeeklyExpense);
+            document.getElementById('expense-monthly').innerText = formatRupiah(totalMonthlyExpense);
+
+            // Net balance estimation
+            const netBalance = totalMonthlyIncome - totalMonthlyExpense;
+            const balanceEl = document.getElementById('net-balance');
+            balanceEl.innerText = formatRupiah(netBalance);
+            if (netBalance >= 0) {
+                balanceEl.className = "text-3xl font-extrabold text-emerald-600";
+            } else {
+                balanceEl.className = "text-3xl font-extrabold text-rose-600";
+            }
+
+            // Sync with bottom navigation for phone
+            const bottomBal = document.getElementById('bottom-net-balance');
+            if (bottomBal) {
+                bottomBal.innerText = formatRupiah(netBalance);
+                bottomBal.className = netBalance >= 0 ? "text-sm font-extrabold text-emerald-600" : "text-sm font-extrabold text-rose-600";
+            }
+
+            // Render emergency & savings
+            document.getElementById('display-savings').innerText = formatRupiah(window.appState.savings.tabungan || 0);
+            document.getElementById('display-emergency').innerText = formatRupiah(window.appState.savings.darurat || 0);
+            document.getElementById('display-savings-dash').innerText = formatRupiah(window.appState.savings.tabungan || 0);
+            document.getElementById('display-emergency-dash').innerText = formatRupiah(window.appState.savings.darurat || 0);
+
+            // Render Salary Info
+            document.getElementById('salary-status-text').innerText = salaryPaidThisMonth 
+                ? "Gaji pokok Rp 2.000.000 bulan ini sudah masuk (Tanggal 5)" 
+                : "Gaji pokok Rp 2.000.000 akan dicairkan pada tanggal 5 mendatang.";
+            document.getElementById('deduction-total-text').innerText = `Total Potongan Izin Bulan Ini: -${formatRupiah(totalDeductionsThisMonth)}`;
+
+            // --- RENDER TICKETS ---
+            const ticketsListContainer = document.getElementById('tickets-list');
+            ticketsListContainer.innerHTML = '';
+
+            if (filteredTickets.length === 0) {
+                ticketsListContainer.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fa-solid fa-clipboard-list text-5xl mb-3 text-slate-300"></i>
+                        <p class="text-sm">Tidak ada tiket jadwal yang ditemukan.</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          };
+                `;
+            } else {
+                const sortedTickets = [...filteredTickets].sort((a,b) => {
+                    if (a.status === 'scheduled' && b.status !== 'scheduled') return -1;
+                    if (a.status !== 'scheduled' && b.status === 'scheduled') return 1;
+                    return new Date(b.date) - new Date(a.date);
+                });
 
-          return (
-            <div className="min-h-screen pb-24">
-              <header className="bg-white border-b border-slate-100 sticky top-0 px-5 py-4 flex justify-between items-center shadow-sm">
-                <h1 className="text-lg font-black text-sky-600 flex items-center gap-1.5"><Wallet className="fill-sky-50" /> BukuUang</h1>
-                <span className="text-xs font-bold bg-sky-50 text-sky-600 px-3 py-1 rounded-full">Device Aktif</span>
-              </header>
+                sortedTickets.forEach(ticket => {
+                    const ticketEarnings = ticket.type === 'maintenance' ? 50000 : 25000;
+                    const typeLabel = ticket.type === 'maintenance' ? 'Maintenance (50rb)' : 'Bantuan Tim (25rb)';
+                    const disburseDateStr = getDisbursementDate(ticket.date);
+                    
+                    let statusBadge = '';
+                    let actionButtons = '';
 
-              <main className="max-w-md mx-auto p-4 mt-2">
-                {activeTab === 'dashboard' && <DashboardTab />}
-                {activeTab === 'pekerjaan' && <PekerjaanTab />}
-                {activeTab === 'tagihan' && <TagihanTab />}
-              </main>
-
-              <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-md border-t border-slate-100 flex justify-around p-3 shadow-lg">
-                <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'dashboard' ? 'text-sky-500' : 'text-slate-400'}`}><Home size={20} />Beranda</button>
-                <button onClick={() => setActiveTab('pekerjaan')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'pekerjaan' ? 'text-sky-500' : 'text-slate-400'}`}><Briefcase size={20} />Kerja</button>
-                <button onClick={() => setActiveTab('tagihan')} className={`flex flex-col items-center gap-1 text-xs font-semibold ${activeTab === 'tagihan' ? 'text-sky-500' : 'text-slate-400'}`}><CreditCard size={20} />Tagihan</button>
-              </nav>
-            </div>
-          );
-        }
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+                    if (ticket.status === 'scheduled') {
+                        statusBadge = `<span class="bg-amber-100 text-amber-800 text-xs font-semibold px-2.5 py-1 rounded-full"><i class="fa-solid fa-clock mr-1"></i>Penjadwalan</span>`;
+                        actionButtons = `
+                            <button onclick="updateTicketStatus('${ticket.id}', 'completed')" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold py-1.5 px-3 rounded-xl flex items-center gap-1 transition">
+                                <i class="fa-solid fa-check"></i> Selesai
+                            </button>
+                            <button onclick="updateTicketStatus('${ticket.id}', 'canceled')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold py-1.5 px-3 rounded-xl flex items-center gap-1 transition">
+                                <i class="fa-soli
